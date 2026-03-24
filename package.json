@@ -1,0 +1,25 @@
+{
+  "name": "xerus-pod",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Xerus compute plane — provider-agnostic orchestration",
+  "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "setup:prod": "bash scripts/setup.sh --prod",
+    "status": "tsx src/orchestrator.ts status",
+    "health": "tsx src/orchestrator.ts health",
+    "capacity": "tsx src/orchestrator.ts capacity",
+    "providers": "tsx src/orchestrator.ts providers",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=unit"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.14.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}

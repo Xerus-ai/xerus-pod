@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts
+
+# Environment (secrets)
+.env
+config/*.env
+!config/*.env.example
+
+# Deployment docs (contain IPs and infra details)
+DEPLOYMENT_PLAN.md
+
+# OS
+.DS_Store
+Thumbs.db
+bash.exe.stackdump
+
+# IDE
+.vscode/
+.idea/
