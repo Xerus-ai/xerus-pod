@@ -1,0 +1,110 @@
+# Xerus Sandbox Daytona Snapshot Image
+# Pre-installs all CLIs and runtime dependencies for instant sandbox creation
+#
+# Build: docker build -f Dockerfile.xerus-sandbox -t xerus-sandbox .
+# Register: Used by scripts/runtime/daytona/register-snapshot.sh
+#
+# Includes:
+# - Node.js 20 LTS (via nodesource)
+# - Python 3.12 + UV package manager
+# - Claude Code CLI (@anthropic-ai/claude-code)
+# - Codex CLI (@openai/codex) - placeholder until GA
+# - sqlite3 (company.db, beads task boards)
+# - Pre-created .xerus directory structure
+
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System packages
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    sqlite3 \
+    python3.12 \
+    python3-pip \
+    python3-venv \
+    sudo \
+    ripgrep \
+    jq \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create daytona user (standard Daytona sandbox user)
+RUN useradd -m -s /bin/bash daytona \
+    && echo "daytona ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/91-daytona
+
+# Node.js 20.x LTS via nodesource (adds to system PATH)
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
+       > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js installation (fail-fast if broken)
+RUN node --version && npm --version
+
+# UV Python package manager (Astral)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Ensure UV is on PATH for subsequent commands
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Claude Code CLI (Anthropic)
+RUN npm install -g @anthropic-ai/claude-code@latest
+
+# Codex CLI (OpenAI) - install when available
+# Note: As of early 2025, codex CLI may not be published yet
+# Uncomment when @openai/codex is available on npm
+# RUN npm install -g @openai/codex@latest || echo "Codex CLI not yet available, skipping"
+
+# Global Node.js tools
+RUN npm install -g ts-node@10.9.2 typescript@5.9.3 @beads/bd
+
+# Python claude-agent-sdk (for Python-based agents)
+RUN python3 -m pip install --no-cache-dir --break-system-packages claude-agent-sdk
+
+# --- Xerus-specific directory structure ---
+
+ENV XERUS_WORKSPACE_ROOT=/home/daytona \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
+
+# Create .xerus directory structure
+RUN mkdir -p /home/daytona/.xerus/runner \
+    && mkdir -p /home/daytona/.xerus/ipc \
+    && chown -R daytona:daytona /home/daytona/.xerus
+
+# Runner package.json with MCP SDK dependency
+COPY runner-package.json /home/daytona/.xerus/runner/package.json
+RUN cd /home/daytona/.xerus/runner \
+    && npm install --production --no-audit --no-fund \
+    && chown -R daytona:daytona /home/daytona/.xerus
+
+# Switch to daytona user
+USER daytona
+WORKDIR /home/daytona
+
+# Ensure UV is available for daytona user
+ENV PATH="/home/daytona/.local/bin:${PATH}"
+
+# Reinstall UV for daytona user (since it was installed as root)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create shell config files
+RUN touch ~/.bashrc ~/.zshrc
+
+# IPC server for inter-CLI communication (if available)
+RUN pip install --user --break-system-packages claude-ipc-mcp 2>/dev/null || echo "claude-ipc-mcp not available, skipping"
+
+# Bun runtime (scheduler daemon uses bun:sqlite and Bun.spawn)
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/home/daytona/.bun/bin:${PATH}"
+
+# Keep container running
+ENTRYPOINT ["sleep", "infinity"]
