@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     sqlite3 \
-    python3.12 \
+    python3 \
     python3-pip \
     python3-venv \
     sudo \
@@ -67,13 +67,10 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Bump versions intentionally after reviewing changelogs.
 
 # Claude Code CLI (Anthropic)
-RUN npm install -g @anthropic-ai/claude-code@1.0.17
+RUN npm install -g @anthropic-ai/claude-code@latest
 
 # Codex CLI (OpenAI)
-RUN npm install -g @openai/codex@0.1.2505072118
-
-# 9to5 scheduling daemon
-RUN npm install -g 9to5-cli@1.0.0
+RUN npm install -g @openai/codex@latest
 
 # Global Node.js tools
 RUN npm install -g ts-node@10.9.2 typescript@5.9.3 @beads/bd
