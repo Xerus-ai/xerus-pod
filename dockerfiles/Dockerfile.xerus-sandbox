@@ -105,8 +105,8 @@ RUN curl -LsSf https://astral.sh/uv/0.6.14/install.sh | sh
 # Create shell config files
 RUN touch ~/.bashrc ~/.zshrc
 
-# IPC server for inter-CLI communication (if available)
-RUN pip install --user --break-system-packages claude-ipc-mcp
+# MCP SDK for IPC server (inter-agent communication)
+RUN pip install --user --break-system-packages mcp
 
 # Bun runtime (scheduler daemon uses bun:sqlite and Bun.spawn)
 # SECURITY: curl|sh install - pin version for reproducibility.
