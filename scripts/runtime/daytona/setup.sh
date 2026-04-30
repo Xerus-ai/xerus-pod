@@ -11,12 +11,13 @@
 #   3. Pulls Daytona images
 #   4. Starts the Daytona stack
 #   5. Waits for API to be healthy
-#   6. Registers xerus-sandbox snapshot
+#   6. Creates MinIO buckets (xerus for workspace snapshots)
+#   7. Registers xerus-sandbox snapshot
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 ENV_MODE="${1:-dev}"
 
 log() { echo "[xerus-pod] $*"; }
@@ -116,7 +117,23 @@ wait_for_api() {
     err "Daytona API did not become healthy after $((max_retries * 2))s"
 }
 
-# ── Step 6: Register xerus-sandbox snapshot ──────────────────────────────────
+# ── Step 6: Create MinIO buckets ────────────────────────────────────────────
+create_minio_buckets() {
+    local compose_file="$ROOT_DIR/config/runtime/daytona/docker-compose.yaml"
+
+    log "Creating MinIO buckets..."
+    docker compose -f "$compose_file" --env-file "$ROOT_DIR/.env" \
+        exec -T minio mc alias set local http://localhost:9000 \
+        "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}" \
+        >/dev/null 2>&1
+
+    docker compose -f "$compose_file" --env-file "$ROOT_DIR/.env" \
+        exec -T minio mc mb local/xerus --ignore-existing 2>/dev/null \
+        && log "MinIO bucket 'xerus' ready" \
+        || log "MinIO bucket 'xerus' already exists"
+}
+
+# ── Step 7: Register xerus-sandbox snapshot ──────────────────────────────────
 register_snapshot() {
     log "Registering xerus-sandbox snapshot..."
     bash "$SCRIPT_DIR/register-snapshot.sh"
@@ -131,6 +148,7 @@ main() {
     setup_env
     start_stack
     wait_for_api
+    create_minio_buckets
     register_snapshot
 
     local api_port

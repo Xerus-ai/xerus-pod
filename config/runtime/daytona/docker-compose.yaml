@@ -10,6 +10,9 @@ name: daytona
 services:
   api:
     image: daytonaio/daytona-api
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "${DAYTONA_API_PORT:-3000}:3000"
     environment:
@@ -120,6 +123,9 @@ services:
 
   proxy:
     image: daytonaio/daytona-proxy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - DAYTONA_API_URL=http://api:3000/api
       - PROXY_PORT=4000
@@ -142,6 +148,9 @@ services:
 
   runner:
     image: daytonaio/daytona-runner
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - ENVIRONMENT=${NODE_ENV:-development}
       - API_PORT=3003

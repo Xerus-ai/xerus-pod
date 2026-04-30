@@ -6,27 +6,72 @@ import type {
     ScaleDecision,
 } from './types.js';
 
-const CPU_PER_SANDBOX = 1;
-const MEMORY_PER_SANDBOX_GB = 1;
 const RESERVED_CPU = 1;        // Reserved for OS + Daytona services
 const RESERVED_MEMORY_GB = 2;  // Reserved for OS + Daytona services
 
-export function calculateMaxSandboxes(cpu: number, memory_gb: number): number {
+export type PlanType = 'pro' | 'max' | 'ultra';
+
+export const PLAN_RESOURCES: Record<PlanType, { cpu: number; memory_gb: number }> = {
+    pro:   { cpu: 1, memory_gb: 2 },
+    max:   { cpu: 2, memory_gb: 4 },
+    ultra: { cpu: 4, memory_gb: 8 },
+};
+
+// Weighted average CPU/memory per sandbox across a plan mix.
+// Default assumes uniform Pro plan when plan mix is unknown.
+const DEFAULT_CPU_PER_SANDBOX = 1;
+const DEFAULT_MEMORY_PER_SANDBOX_GB = 2;
+
+export function calculateMaxSandboxes(
+    cpu: number,
+    memory_gb: number,
+    avg_cpu_per_sandbox = DEFAULT_CPU_PER_SANDBOX,
+    avg_memory_per_sandbox = DEFAULT_MEMORY_PER_SANDBOX_GB,
+): number {
     const available_cpu = Math.max(0, cpu - RESERVED_CPU);
     const available_memory = Math.max(0, memory_gb - RESERVED_MEMORY_GB);
 
-    const cpu_slots = Math.floor(available_cpu / CPU_PER_SANDBOX);
-    const memory_slots = Math.floor(available_memory / MEMORY_PER_SANDBOX_GB);
+    const cpu_slots = Math.floor(available_cpu / avg_cpu_per_sandbox);
+    const memory_slots = Math.floor(available_memory / avg_memory_per_sandbox);
 
     return Math.min(cpu_slots, memory_slots);
+}
+
+export function calculateWeightedResources(
+    plan_counts: Partial<Record<PlanType, number>>,
+): { avg_cpu: number; avg_memory: number; total_cpu: number; total_memory: number } {
+    let total_cpu = 0;
+    let total_memory = 0;
+    let total_sandboxes = 0;
+
+    for (const [plan, count] of Object.entries(plan_counts) as [PlanType, number][]) {
+        const resources = PLAN_RESOURCES[plan];
+        if (resources && count > 0) {
+            total_cpu += resources.cpu * count;
+            total_memory += resources.memory_gb * count;
+            total_sandboxes += count;
+        }
+    }
+
+    return {
+        avg_cpu: total_sandboxes > 0 ? total_cpu / total_sandboxes : DEFAULT_CPU_PER_SANDBOX,
+        avg_memory: total_sandboxes > 0 ? total_memory / total_sandboxes : DEFAULT_MEMORY_PER_SANDBOX_GB,
+        total_cpu,
+        total_memory,
+    };
 }
 
 export function calculateCapacity(
     cpu: number,
     memory_gb: number,
     active_sandboxes: number,
+    plan_counts?: Partial<Record<PlanType, number>>,
 ): CapacityInfo {
-    const max_sandboxes = calculateMaxSandboxes(cpu, memory_gb);
+    const weighted = plan_counts
+        ? calculateWeightedResources(plan_counts)
+        : { avg_cpu: DEFAULT_CPU_PER_SANDBOX, avg_memory: DEFAULT_MEMORY_PER_SANDBOX_GB, total_cpu: active_sandboxes * DEFAULT_CPU_PER_SANDBOX, total_memory: active_sandboxes * DEFAULT_MEMORY_PER_SANDBOX_GB };
+
+    const max_sandboxes = calculateMaxSandboxes(cpu, memory_gb, weighted.avg_cpu, weighted.avg_memory);
     const utilization = max_sandboxes > 0
         ? Math.round((active_sandboxes / max_sandboxes) * 100)
         : 100;
@@ -34,8 +79,8 @@ export function calculateCapacity(
     return {
         total_cpu: cpu,
         total_memory: memory_gb,
-        used_cpu: active_sandboxes * CPU_PER_SANDBOX,
-        used_memory: active_sandboxes * MEMORY_PER_SANDBOX_GB,
+        used_cpu: weighted.total_cpu,
+        used_memory: weighted.total_memory,
         sandbox_count: active_sandboxes,
         max_sandboxes,
         utilization_percent: utilization,
